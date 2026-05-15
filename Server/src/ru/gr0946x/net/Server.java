@@ -1,15 +1,16 @@
 package ru.gr0946x.net;
 
-import java.io.BufferedReader;
+import ru.gr0946x.server.db.service.UserService;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 
 public class Server {
 
     private boolean isActive;
-    public Server(int port){
+    private UserService userService;
+
+    public Server(int port, UserService userService) {
+        this.userService = userService;
         isActive = true;
         new Thread(()->{
             try (var serverSocket = new ServerSocket(port)) {
@@ -18,11 +19,10 @@ public class Server {
                     try{
                         var socket = serverSocket.accept();
                         System.out.println("Клиент подключен");
-                        var connClient = new ConnectedClient(socket);
+                        var connClient = new ConnectedClient(socket, userService);
                         connClient.start();
                     } catch (Exception e) {
                         System.out.println("Ошибка подключения клиентов...");
-                        System.out.println(e.getMessage());
                         isActive = false;
                     }
                 }

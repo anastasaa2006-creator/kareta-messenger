@@ -5,16 +5,20 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import ru.gr0946x.server.db.entity.User;
+import ru.gr0946x.server.db.service.UserService;
+
 
 public class ConnectedClient {
     private final Communicator communicator;
     private final static List<ConnectedClient> clients = new ArrayList<>();
     private User currentUser = null;
     private String name = null;
+    private UserService userService;
 
-    public ConnectedClient(Socket socket) throws IOException {
-        communicator = new Communicator(socket);
-        communicator.addDataListener(this::parseData);
+    public ConnectedClient(Socket socket, UserService userService) throws IOException {
+        this.userService = userService;
+        this.communicator = new Communicator(socket);
+        this.communicator.addDataListener(this::parseData);
         synchronized (clients) {
             clients.add(this);
         }
@@ -32,19 +36,42 @@ public class ConnectedClient {
 
     private void parseData(String data){
         if (currentUser == null) {
-            if (!data.matches("^[A-Za-zА-Яа-я].*$")) {
-                sendData(MessageType.ERROR + ":" + "Имя должно начинаться с буквы");
-                sendData(MessageType.REQUEST + ":" + "Введите имя:");
+            String[] parts = data.split(":", 3);
+            if (parts.length < 3) {
+                sendData(MessageType.ERROR + ":" + "Для регистрации: REG:ВашНик:Пароль");
+                sendData(MessageType.REQUEST + ":" + "Для входа: LOGIN:ВашНик:Пароль");
                 return;
             }
-            if (isInUse(data)){
-                sendData(MessageType.ERROR + ":" + "Такое имя уже занято");
-                sendData(MessageType.REQUEST + ":" + "Введите имя:");
-                return;
+
+            String cmd = parts[0];
+            String nick = parts[1];
+            String pass = parts[2];
+
+            if ("LOGIN".equalsIgnoreCase(cmd)) {
+                try {
+                    currentUser = userService.login(nick, pass);
+                    name = currentUser.getNick();
+                    sendData(MessageType.INFO + ":" + "Добро пожаловать, " + name);
+                    sendForAll(MessageType.INFO, "Пользователь " + name + " вошел в чат");
+                } catch (Exception e) {
+                    sendData(MessageType.ERROR + ":" + e.getMessage());
+                }
+            } else if ("REG".equalsIgnoreCase(cmd)) {
+                if (!nick.matches("^[A-Za-zА-Яа-я].*$")) {
+                    sendData(MessageType.ERROR + ":" + "Имя должно начинаться с буквы");
+                    return;
+                }
+                try {
+                    currentUser = userService.register(nick, pass);
+                    name = currentUser.getNick();
+                    sendData(MessageType.INFO + ":" + "Регистрация успешна! Добро пожаловать, " + name);
+                    sendForAll(MessageType.INFO, "Пользователь " + name + " присоединился к чату");
+                } catch (Exception e) {
+                    sendData(MessageType.ERROR + ":" + e.getMessage());
+                }
+            } else {
+                sendData(MessageType.ERROR + ":" + "Неизвестная команда. Используйте LOGIN или REG");
             }
-            currentUser = new User(data, "");
-            name = data;
-            sendForAll(MessageType.INFO, "Пользователь "+ name + " вошел в чат");
         } else {
             sendForAll(MessageType.MESSAGE, data);
         }
