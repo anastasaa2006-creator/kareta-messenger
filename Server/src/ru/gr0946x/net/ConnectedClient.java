@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
+import ru.gr0946x.server.db.entity.User;
 
 public class ConnectedClient {
     private final Communicator communicator;
     private final static List<ConnectedClient> clients = new ArrayList<>();
+    private User currentUser = null;
     private String name = null;
 
     public ConnectedClient(Socket socket) throws IOException {
@@ -29,31 +31,23 @@ public class ConnectedClient {
     }
 
     private void parseData(String data){
-        if (name == null){
-            if (data.isBlank()){
-                sendData(MessageType.ERROR
-                        + ProtocolConstants.COMMAND_SEPARATOR
-                        + "Такое имя не подходит");
-                sendData(MessageType.REQUEST
-                        + ProtocolConstants.COMMAND_SEPARATOR
-                        + "Введите имя");
+        if (currentUser == null) {
+            if (!data.matches("^[A-Za-zА-Яа-я].*$")) {
+                sendData(MessageType.ERROR + ":" + "Имя должно начинаться с буквы");
+                sendData(MessageType.REQUEST + ":" + "Введите имя:");
                 return;
             }
             if (isInUse(data)){
-                sendData(MessageType.ERROR
-                        + ProtocolConstants.COMMAND_SEPARATOR
-                        + "Такое имя уже занято");
-                sendData(MessageType.REQUEST
-                        + ProtocolConstants.COMMAND_SEPARATOR
-                        + "Введите имя");
+                sendData(MessageType.ERROR + ":" + "Такое имя уже занято");
+                sendData(MessageType.REQUEST + ":" + "Введите имя:");
                 return;
             }
+            currentUser = new User(data, "");
             name = data;
             sendForAll(MessageType.INFO, "Пользователь "+ name + " вошел в чат");
         } else {
             sendForAll(MessageType.MESSAGE, data);
         }
-
     }
 
     private void sendForAll(MessageType type, String data){
