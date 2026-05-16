@@ -71,4 +71,16 @@ public class MessageService {
 
         return messageRepository.searchMessagesBetweenUsers(current, other, keyword);
     }
+
+    public List<Message> getLastMessages(String currentNick, String otherNick, int limit) {
+        User current = userRepository.findByNickIgnoreCase(currentNick)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+        User other = userRepository.findByNickIgnoreCase(otherNick)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+        return messageRepository.findConversation(current, other)
+                .stream()
+                .limit(limit)
+                .toList();
+    }
 }

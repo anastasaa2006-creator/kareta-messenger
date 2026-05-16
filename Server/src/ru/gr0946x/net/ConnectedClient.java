@@ -131,7 +131,12 @@ public class ConnectedClient {
             }
             case "HISTORY" -> {
                 if (parts.length > 1) {
-                    // TODO: добавить историю
+                    var messages = messageService.getLastMessages(currentUser.getNick(), parts[1], 50);
+                    sendData(MessageType.INFO + ":" + "=== История с " + parts[1] + " ===");
+                    for (var msg : messages) {
+                        String from = msg.getSender().getNick().equals(currentUser.getNick()) ? "Я" : msg.getSender().getNick();
+                        sendData(MessageType.HISTORY_RESPONSE + ":" + from + ": " + msg.getText());
+                    }
                 }
             }
             case "SEARCH" -> {
