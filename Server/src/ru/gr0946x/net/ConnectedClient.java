@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import ru.gr0946x.server.db.entity.User;
 import ru.gr0946x.server.db.service.UserService;
+import ru.gr0946x.server.db.service.MessageService;
 
 
 public class ConnectedClient {
@@ -14,9 +15,11 @@ public class ConnectedClient {
     private User currentUser = null;
     private String name = null;
     private UserService userService;
+    private MessageService messageService;
 
-    public ConnectedClient(Socket socket, UserService userService) throws IOException {
+    public ConnectedClient(Socket socket, UserService userService, MessageService messageService) throws IOException {
         this.userService = userService;
+        this.messageService = messageService;
         this.communicator = new Communicator(socket);
         this.communicator.addDataListener(this::parseData);
         synchronized (clients) {
@@ -73,7 +76,7 @@ public class ConnectedClient {
                 sendData(MessageType.ERROR + ":" + "Неизвестная команда. Используйте LOGIN или REG");
             }
         } else {
-            sendForAll(MessageType.MESSAGE, data);
+            handleCommand(data);
         }
     }
 
@@ -101,5 +104,71 @@ public class ConnectedClient {
 
     public void stop(){
         communicator.stop();
+    }
+
+    private void handleCommand(String data) {
+        String[] parts = data.split(":", 3);
+        String cmd = parts[0].toUpperCase();
+
+        switch (cmd) {
+            case "MSG" -> {
+                if (parts.length > 1) {
+                    sendForAll(MessageType.MESSAGE, parts[1]);
+                }
+            }
+            case "PRIVATE" -> {
+                if (parts.length > 2) {
+                    try {
+                        messageService.saveMessage(currentUser.getNick(), parts[1], parts[2]);
+                        findClientByNick(parts[1]).ifPresent(client ->
+                                client.sendData(MessageType.PRIVATE_MESSAGE + ":" + currentUser.getNick() + ":" + parts[2])
+                        );
+                        sendData(MessageType.INFO + ":" + "Отправлено " + parts[1]);
+                    } catch (Exception e) {
+                        sendData(MessageType.ERROR + ":" + e.getMessage());
+                    }
+                }
+            }
+            case "HISTORY" -> {
+                if (parts.length > 1) {
+                    // TODO: добавить историю
+                }
+            }
+            case "SEARCH" -> {
+                if (parts.length > 2) {
+                    try {
+                        var results = messageService.searchMessagesWithUser(currentUser.getNick(), parts[1], parts[2]);
+                        sendData(MessageType.INFO + ":" + "Найдено: " + results.size());
+                        for (var msg : results) {
+                            String from = msg.getSender().getNick().equals(currentUser.getNick()) ? "Я" : msg.getSender().getNick();
+                            sendData(MessageType.SEARCH_RESPONSE + ":" + from + ": " + msg.getText());
+                        }
+                    } catch (Exception e) {
+                        sendData(MessageType.ERROR + ":" + e.getMessage());
+                    }
+                }
+            }
+            case "USERS" -> sendUserList();
+            default -> sendData(MessageType.ERROR + ":" + "Неизвестно. MSG, PRIVATE, HISTORY, SEARCH, USERS");
+        }
+    }
+
+    private java.util.Optional<ConnectedClient> findClientByNick(String nick) {
+        synchronized (clients) {
+            return clients.stream()
+                    .filter(c -> c.name != null && c.name.equalsIgnoreCase(nick))
+                    .findFirst();
+        }
+    }
+
+    private void sendUserList() {
+        List<String> online;
+        synchronized (clients) {
+            online = clients.stream()
+                    .filter(c -> c.name != null && c != this)
+                    .map(c -> c.name)
+                    .toList();
+        }
+        sendData(MessageType.INFO + ":" + "Онлайн: " + (online.isEmpty() ? "нет" : String.join(", ", online)));
     }
 }
