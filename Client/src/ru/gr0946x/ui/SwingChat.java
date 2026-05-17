@@ -1,6 +1,8 @@
 package ru.gr0946x.ui;
 
 import ru.gr0946x.net.Client;
+import ru.gr0946x.net.MessageType;
+import ru.gr0946x.net.ProtocolConstants;
 
 import javax.swing.*;
 import java.awt.*;
@@ -10,25 +12,32 @@ public class SwingChat extends JFrame {
 
     private JTextArea chatArea;
     private JTextField inputField;
+    private JButton sendButton;
     private Client client;
 
     public SwingChat() {
         setTitle("Карета Мессенджер");
-        setSize(500, 400);
+        setSize(600, 500);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         // Область чата
         chatArea = new JTextArea();
         chatArea.setEditable(false);
-        chatArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        add(new JScrollPane(chatArea), BorderLayout.CENTER);
+        chatArea.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        JScrollPane scroll = new JScrollPane(chatArea);
+        add(scroll, BorderLayout.CENTER);
 
-        // Поле ввода
+        // Нижняя панель
+        JPanel bottomPanel = new JPanel(new BorderLayout());
         inputField = new JTextField();
-        add(inputField, BorderLayout.SOUTH);
+        sendButton = new JButton("Отправить");
+        bottomPanel.add(inputField, BorderLayout.CENTER);
+        bottomPanel.add(sendButton, BorderLayout.EAST);
+        add(bottomPanel, BorderLayout.SOUTH);
 
-        // Отправка по Enter
+        // Обработчики
+        sendButton.addActionListener(e -> sendMessage());
         inputField.addActionListener(e -> sendMessage());
 
         setVisible(true);
@@ -36,11 +45,11 @@ public class SwingChat extends JFrame {
 
     private void sendMessage() {
         String text = inputField.getText().trim();
-        if (text.isEmpty()) return;
+        if (text.isEmpty() || client == null) return;
 
-        // Отправляем на сервер
         client.sendData(text);
         inputField.setText("");
+        inputField.requestFocus();
     }
 
     public void appendMessage(String msg) {
@@ -54,25 +63,36 @@ public class SwingChat extends JFrame {
         try {
             client = new Client("localhost", 9460);
 
-            // Обработка входящих сообщений
             client.addDataListener((data, type) -> {
                 switch (type) {
                     case MESSAGE -> {
-                        String[] parts = data.split(":", 2);
-                        appendMessage(parts[0] + ": " + parts[1]);
+                        String[] parts = data.split(ProtocolConstants.AUTHOR_SEPARATOR, 2);
+                        if (parts.length == 2) {
+                            appendMessage(parts[0] + ": " + parts[1]);
+                        }
+                    }
+                    case PRIVATE_MESSAGE -> {
+                        String[] parts = data.split(ProtocolConstants.AUTHOR_SEPARATOR, 2);
+                        if (parts.length == 2) {
+                            appendMessage("[Лично от " + parts[0] + "]: " + parts[1]);
+                        }
                     }
                     case INFO, HISTORY_RESPONSE, SEARCH_RESPONSE -> appendMessage("[INFO] " + data);
-                    case ERROR -> appendMessage("[ERROR] " + data);
+                    case ERROR -> appendMessage("[ОШИБКА] " + data);
                     case REQUEST -> appendMessage("[ЗАПРОС] " + data);
                     default -> appendMessage(data);
                 }
             });
 
             client.start();
+            appendMessage("=== КАРЕТА МЕССЕНДЖЕР ===");
             appendMessage("Подключено к серверу");
+            appendMessage("Введите LOGIN:ник:пароль или REG:ник:пароль");
+
+            inputField.requestFocus();
 
         } catch (IOException e) {
-            appendMessage("Ошибка подключения: " + e.getMessage());
+            appendMessage("Ошибка: " + e.getMessage());
         }
     }
 
