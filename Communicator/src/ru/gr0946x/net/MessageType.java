@@ -14,5 +14,6 @@ public enum MessageType {
     HISTORY_REQUEST,
     HISTORY_RESPONSE,
     SEARCH_REQUEST,
-    SEARCH_RESPONSE
+    SEARCH_RESPONSE,
+    SHOWDB
 }
